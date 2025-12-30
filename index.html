@@ -5,47 +5,70 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Calculadora de vencimiento</title>
-  <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css">
   <style>
-    /* Estilos mínimos; puedes reemplazar por tu styles.css si prefieres */
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; line-height: 1.35; }
-    h1 { margin-bottom: 8px; }
-    .muted { color:#666; }
-    .card { padding:16px; border:1px solid #ddd; border-radius:8px; max-width:900px; }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    @media (max-width:768px){ .row { grid-template-columns:1fr; } }
-    input, textarea, select { width:100%; padding:10px; font-size:1rem; border:1px solid #ccc; border-radius:6px; }
-    input:focus, textarea:focus, select:focus { outline: 2px solid #1976d2; border-color:#1976d2; }
-    .btn { padding:8px 12px; border:0; border-radius:6px; background:#1976d2; color:#fff; cursor:pointer; }
-    .btn.secondary { background:#777; }
-    .result { background:#f6f8fa; border:1px solid #e0e0e0; padding:12px; border-radius:6px; margin-top:12px; }
-    details { margin-top:12px; }
-    .tools { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
-    .error { color:#b00020; }
-    code { background:#eee; padding: 2px 4px; border-radius: 4px; }
+    /* ===== Switcher (segmentado) mínimo, no invasivo ===== */
+    .segmented {
+      display: inline-flex;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 10px;
+      overflow: hidden;
+      background: color-mix(in oklab, var(--card-bg, #fff) 90%, var(--bg, #f7f9fc));
+    }
+    .segmented .seg-btn {
+      padding: 8px 14px;
+      border: none;
+      background: transparent;
+      color: var(--text, #101318);
+      cursor: pointer;
+      font: inherit;
+      transition: background .15s ease, color .15s ease;
+    }
+    .segmented .seg-btn + .seg-btn { border-left: 1px solid var(--border, #e5e7eb); }
+    .segmented .seg-btn.active {
+      background: color-mix(in oklab, var(--primary, #2563eb) 16%, var(--bg, #f7f9fc));
+      color: #fff;
+    }
+    /* Ocultar bloques según modo */
+    .hidden { display: none !important; }
   </style>
 </head>
+
 <body>
   <h1>Calculadora de vencimiento (2 campos)</h1>
   <p class="muted">
-    Ingresa la <b>fecha/hora</b> de creación y las <b>horas de vida</b> del ticket. Jornada por defecto: <b>Lun–Vie, 08:00–19:00</b> (Lima, UTC−5).
+    Ingresa la <b>fecha/hora</b> de creación y, si corresponde, las <b>horas de vida</b> del ticket.
+    Jornada por defecto: <b>Lun–Vie, 08:00–19:00</b> (Lima, UTC−5).
   </p>
 
   <div class="card" role="region" aria-label="Calculadora de vencimiento">
-    <!-- 1) Entradas principales -->
+    <!-- 1) Fecha/hora -->
     <div class="row">
       <div>
         <label for="dt"><b>Fecha/hora de creación</b></label>
         <div style="display:flex; gap:8px;">
           <input id="dt" type="text" placeholder="Ej: 2025-12-29 08:56:13" aria-describedby="dtHelp" style="flex:1;">
-          <!-- Botón NUEVO: Ahora (Lima) -->
           <button id="nowBtn" type="button" class="btn secondary" title="Usar ahora (Lima)">Ahora</button>
         </div>
         <small id="dtHelp" class="muted">
-          Formatos admitidos: <code>YYYY-MM-DD HH:mm[:ss]</code>, <code>YYYY/MM/DD HH:mm[:ss]</code>, <code>DD/MM/YYYY HH:mm[:ss]</code>, o <code>YYYY-MM-DDTHH:mm</code>.
+          Formatos admitidos: <code>YYYY-MM-DD HH:mm[:ss]</code>, <code>YYYY/MM/DD HH:mm[:ss]</code>,
+          <code>DD/MM/YYYY HH:mm[:ss]</code>, o <code>YYYY-MM-DDTHH:mm</code>.
         </small>
       </div>
+
+      <!-- 2) Switcher de modo -->
+      <div>
+        <label><b>Modo de ingreso de horas</b></label>
+        <div class="segmented" role="tablist" aria-label="Modo de ingreso">
+          <button type="button" class="seg-btn active" data-mode="manual" aria-selected="true" aria-controls="manualBlock">Manual</button>
+          <button type="button" class="seg-btn" data-mode="lookup" aria-selected="false" aria-controls="lookupBlock">Por Palabra Clave</button>
+        </div>
+        <small class="muted">Alterna entre ingreso manual o selección por Palabra Clave (usa OLA interna).</small>
+      </div>
+    </div>
+
+    <!-- 3) Bloque MANUAL (visible por defecto) -->
+    <div id="manualBlock" class="row" style="margin-top:12px;">
       <div>
         <label for="hours"><b>Horas de vida del ticket</b></label>
         <input id="hours" type="number" min="0" step="0.25" placeholder="48" aria-describedby="hHelp">
@@ -53,26 +76,44 @@
       </div>
     </div>
 
-    <!-- 2) Acciones -->
+    <!-- 4) Bloque LOOKUP (oculto inicialmente) -->
+    <div id="lookupBlock" class="row hidden" style="margin-top:12px;">
+      <div>
+        <label for="keywordFilter">Filtrar Palabra Clave</label>
+        <input id="keywordFilter" type="text" placeholder="Escribe para filtrar (ej: Cloud, Adobe, Notebook)"/>
+        <small>Filtra la lista según texto.</small>
+      </div>
+      <div>
+        <label for="keywordSelect">Palabra Clave</label>
+        <select id="keywordSelect" size="10" aria-describedby="lookupHelp"></select>
+        <small id="lookupHelp" class="muted">Al seleccionar, se aplica su OLA automáticamente.</small>
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label>Detalle del seleccionado</label>
+        <div id="lookupInfo" class="result" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- 5) Acciones -->
     <div style="margin-top:16px; display:flex; gap:8px; justify-content:center;">
       <button id="calcBtn" class="btn">Calcular vencimiento</button>
       <button id="resetBtn" class="btn secondary">Restablecer ejemplo</button>
     </div>
 
-    <!-- 3) Resultado -->
+    <!-- 6) Resultado -->
     <div id="result" class="result" style="display:none;" aria-live="polite"></div>
     <div id="tools" class="tools" style="display:none;">
       <button id="copyBtn" class="btn secondary">Copiar</button>
     </div>
 
-    <!-- 4) Detalle del cálculo -->
-    <details>
+    <!-- 7) Detalle del cálculo -->
+    <details style="margin-top:12px;">
       <summary><b>Detalle del cálculo</b> (tramos acumulados)</summary>
       <pre id="debugLog"></pre>
     </details>
 
-    <!-- 5) Configuración avanzada -->
-    <details>
+    <!-- 8) Configuración avanzada (después del resultado) -->
+    <details style="margin-top:12px;">
       <summary><b>Configuración avanzada</b> (horario, días hábiles, feriados, pausa)</summary>
       <div class="row" style="margin-top:8px;">
         <div>
@@ -117,85 +158,70 @@
     </details>
   </div>
 
+  <p class="muted" style="margin-top:12px;">
+    Notas:
+    <br/>• Puedes pegar fechas como <code>2025-12-23 11:20:59</code>, <code>23/12/2025 11:20</code> o <code>2025/12/23 11:20</code>.
+    <br/>• Si la hora inicial está fuera del horario laboral, se mueve al próximo inicio de jornada.
+    <br/>• Lima (UTC-5) no usa horario de verano; este cálculo es estable durante el año.
+  </p>
+
   <script>
     // ====== Utilidades de fecha/hora ======
-    const pad2 = (n)=> String(n).padStart(2,'0');
-    const fmtYMDHMS = (d)=> `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
-    const fmtPeru   = (d)=> `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
-    const timeToMinutes = (t)=> { const [h,m] = t.split(':').map(Number); return h*60 + m; };
+    const pad2 = (n) => String(n).padStart(2,'0');
+    const fmtYMDHMS = (d) => `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())} ${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
+    const fmtPeru   = (d) => `${pad2(d.getDate())}/${pad2(d.getMonth()+1)}/${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+    const timeToMinutes = (t) => { const [h,m] = t.split(':').map(Number); return h*60 + m; };
 
-    // ====== Parser robusto (acepta varios formatos) ======
-    // "YYYY-MM-DD HH:mm[:ss]", "YYYY/MM/DD HH:mm[:ss]", "DD/MM/YYYY HH:mm[:ss]", y "YYYY-MM-DDTHH:mm"
+    // Parser robusto
     function parseFlexibleDateTime(input) {
       if (!input) return null;
+      const s = String(input).replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
 
-      // Normaliza espacios (incluye non-breaking space) y colapsa múltiples
-      let s = String(input)
-        .replace(/\u00A0/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      // 1) ISO/espacio: YYYY-MM-DD[ T]HH:mm[:ss]
-      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})T\s:(\d{2})(?::(\d{2}))?/);
+      // ISO / espacio: YYYY-MM-DD[ T]HH:mm[:ss]
+      let m = s.match(/^(\d{4})-(\d{2})-(\d{2})T :(\d{2})(?::(\d{2}))?$/);
       if (m) {
-        const Y = +m[1], M = +m[2] - 1, D = +m[3], h = +m[4], mm = +m[5], ss = +(m[6] || 0);
-        return new Date(Y, M, D, h, mm, ss, 0);
+        const [_, Y, M, D, h, mm, ss] = m;
+        return new Date(+Y, +M-1, +D, +h, +mm, +(ss||0), 0);
       }
-
-      // 2) YYYY/MM/DD HH:mm[:ss] o YYYY-MM-DD HH:mm[:ss]
-      m = s.match(/^(\d{4})\/-\/-\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+      // YYYY/MM/DD HH:mm[:ss] o YYYY-MM-DD HH:mm[:ss]
+      m = s.match(/^(\d{4})-\/[-\/](\d{2):(\d{2})(?::(\d{2}))?$/);
       if (m) {
-        const Y = +m[1], M = +m[2] - 1, D = +m[3], h = +m[4], mm = +m[5], ss = +(m[6] || 0);
-        return new Date(Y, M, D, h, mm, ss, 0);
+        const [_, Y, M, D, h, mm, ss] = m;
+        return new Date(+Y, +M-1, +D, +h, +mm, +(ss||0), 0);
       }
-
-      // 3) DD/MM/YYYY HH:mm[:ss]
-      m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})(?::(\d{2}))?/);
+      // DD/MM/YYYY HH:mm[:ss]
+      m = s.match(/^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})(?::(\d{2}))?$/);
       if (m) {
-        const D = +m[1], M = +m[2] - 1, Y = +m[3], h = +m[4], mm = +m[5], ss = +(m[6] || 0);
-        return new Date(Y, M, D, h, mm, ss, 0);
+        const [_, D, M, Y, h, mm, ss] = m;
+        return new Date(+Y, +M-1, +D, +h, +mm, +(ss||0), 0);
       }
-
-      // 4) Fallback exacto: "YYYY-MM-DD HH:mm:ss"
+      // Fallback exacto
       if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(s)) {
         const [datePart, timePart] = s.split(' ');
         const [Y, M, D] = datePart.split('-').map(Number);
         const [h, mm, ss] = timePart.split(':').map(Number);
         return new Date(Y, M - 1, D, h, mm, ss, 0);
       }
-
       return null;
     }
 
-    // ====== “Ahora” en Lima (America/Lima) ======
+    // “Ahora” en Lima
     function nowInTimeZoneComponents(tz = 'America/Lima') {
       const fmt = new Intl.DateTimeFormat('es-PE', {
-        timeZone: tz,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
+        timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
       });
       const parts = fmt.formatToParts(new Date());
       const get = (type) => parts.find(p => p.type === type)?.value;
-      const Y = get('year');
-      const M = get('month');
-      const D = get('day');
-      const h = get('hour');
-      const m = get('minute');
-      const s = get('second');
-      return { Y, M, D, h, m, s };
+      return { Y:get('year'), M:get('month'), D:get('day'), h:get('hour'), m:get('minute'), s:get('second') };
     }
     function formatYMDHMS({ Y, M, D, h, m, s }) {
       return `${Y}-${M}-${D} ${h}:${m}:${s}`;
     }
 
-    // ====== Calendario laboral ======
+    // Calendario laboral
     function isWorkingDay(date, workDaysSet, holidaysSet) {
-      const dow = date.getDay(); // 0=Dom, 1=Lun...
+      const dow = date.getDay();
       const ymd = `${date.getFullYear()}-${pad2(date.getMonth()+1)}-${pad2(date.getDate())}`;
       if (!workDaysSet.has(dow)) return false;
       if (holidaysSet.has(ymd)) return false;
@@ -213,7 +239,7 @@
       }
     }
 
-    // Pausa opcional por segmentos
+    // Pausa opcional
     function getDaySegments(wsMin, weMin, useBreak, bStartMin, bEndMin) {
       if (!useBreak) return [[wsMin, weMin]];
       const bStart = Math.max(wsMin, Math.min(bStartMin, weMin));
@@ -313,20 +339,128 @@
     const breakEndEl  = document.getElementById('breakEnd');
     const wdChecks    = Array.from(document.querySelectorAll('.wd'));
 
+    // Switcher
+    const segBtns = Array.from(document.querySelectorAll('.segmented .seg-btn'));
+    const manualBlockEl = document.getElementById('manualBlock');
+    const lookupBlockEl = document.getElementById('lookupBlock');
+    let currentMode = 'manual';
+
+    function setMode(mode){
+      currentMode = mode;
+      segBtns.forEach(btn => {
+        const isActive = btn.dataset.mode === mode;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      });
+      // Mostrar/ocultar bloques
+      manualBlockEl.classList.toggle('hidden', mode !== 'manual');
+      lookupBlockEl.classList.toggle('hidden', mode !== 'lookup');
+      // Control de edición de horas
+      hoursEl.readOnly = (mode === 'lookup');
+      hoursEl.placeholder = (mode === 'lookup') ? 'Se llena según Palabra Clave' : '48';
+      if (mode === 'lookup') {
+        // Si hay seleccionado, actualizar horas
+        const opt = keywordSelectEl.selectedOptions[0];
+        if (opt) hoursEl.value = String(Number(opt.dataset.hours || '0'));
+      }
+    }
+    segBtns.forEach(btn => btn.addEventListener('click', () => setMode(btn.dataset.mode)));
+
+    // Lista OLA
+    const keywordFilterEl= document.getElementById('keywordFilter');
+    const keywordSelectEl= document.getElementById('keywordSelect');
+    const lookupInfoEl   = document.getElementById('lookupInfo');
+
+    const OLA_SCENARIOS = [
+      { keyword: 'ABBYY License',                 ola: '2 Hrs' },
+      { keyword: 'Adobe Acrobat License',         ola: '2 Hrs' },
+      { keyword: 'Adobe Creative Cloud License',  ola: '2 Hrs' },
+      { keyword: 'Alteryx License',               ola: '2 Hrs' },
+      { keyword: 'Cloud PC New',                  ola: '4 Hrs' },
+      { keyword: 'ChatPwC License',               ola: '2 Hrs' },
+      { keyword: 'Data Snipper License',          ola: '2 Hrs' },
+      { keyword: 'External Monitor',              ola: '2 Hrs' },
+      { keyword: 'ASSET Internal Documentation',  ola: '4 Hrs' },
+      { keyword: 'Inventory Management',          ola: '24 Hrs' },
+      { keyword: 'Joiner',                        ola: '72 Hrs' },
+      { keyword: 'Leave of Absence',              ola: '24 Hrs' },
+      { keyword: 'Leaver',                        ola: '12 Hrs' },
+      { keyword: 'Mentimeter License',            ola: '2 Hrs' },
+      { keyword: 'Copilot License',               ola: '2 Hrs' },
+      { keyword: 'Mover',                         ola: '24 Hrs' },
+      { keyword: 'Mural License',                 ola: '2 Hrs' },
+      { keyword: 'Inventory Audit',               ola: '2 Hrs' },
+      { keyword: 'Notebook Maintenance',          ola: '2 Hrs' },
+      { keyword: 'Notebook Warranty',             ola: '72 Hrs' },
+      { keyword: 'Notebook Inventory',            ola: '48 Hrs' },
+      { keyword: 'Notebook Refresh',              ola: '48 Hrs' },
+      { keyword: 'Notebook Replace',              ola: '48 Hrs' },
+      { keyword: 'Notebook Sale',                 ola: '48 Hrs' },
+      { keyword: 'Power Automate License',        ola: '2 Hrs' },
+      { keyword: 'Shutterstock License',          ola: '2 Hrs' },
+      { keyword: 'Snagit License',                ola: '2 Hrs' },
+      { keyword: 'Thinkcell License',             ola: '2 Hrs' }
+    ];
+
+    const olaMap = new Map();
+    const hoursFromLabel = (label) => Number(String(label).replace(',', '.').replace(/[^\d.]/g,''));
+
+    function initPreloadedOLA() {
+      olaMap.clear();
+      for (const r of OLA_SCENARIOS) olaMap.set(r.keyword, { hours: hoursFromLabel(r.ola) });
+      populateKeywordSelect();
+    }
+    function populateKeywordSelect() {
+      const filter = (keywordFilterEl.value || '').toLowerCase();
+      keywordSelectEl.innerHTML = '';
+      const items = Array.from(olaMap.entries())
+        .map(([k,v]) => ({ keyword: k, hours: v.hours }))
+        .sort((a,b) => a.keyword.localeCompare(b.keyword));
+      for (const it of items) {
+        if (filter && !it.keyword.toLowerCase().includes(filter)) continue;
+        const opt = document.createElement('option');
+        opt.value = it.keyword;
+        opt.textContent = `${it.keyword} · OLA: ${it.hours}h`;
+        opt.dataset.hours = String(it.hours);
+        keywordSelectEl.appendChild(opt);
+      }
+    }
+    keywordFilterEl.addEventListener('input', populateKeywordSelect);
+
+    keywordSelectEl.addEventListener('change', () => {
+      const opt = keywordSelectEl.selectedOptions[0];
+      if (!opt) return;
+      const h = Number(opt.dataset.hours || '0');
+      hoursEl.value = String(h); // se usa internamente (readOnly en lookup)
+      lookupInfoEl.style.display = 'block';
+      lookupInfoEl.innerHTML = `
+        <div><b>Seleccionado:</b> ${opt.value}</div>
+        <div><small>OLA aplicado: ${h} horas</small></div>
+      `;
+    });
+
+    // Helpers
     function getSelectedWorkDays(){ return wdChecks.filter(c => c.checked).map(c => Number(c.value)); }
     function parseHolidaysTextarea(){ return holidaysEl.value.split('\n').map(s => s.trim()).filter(Boolean); }
 
+    function getEffectiveHours() {
+      if (currentMode === 'lookup') {
+        const opt = keywordSelectEl.selectedOptions[0];
+        if (opt) return Number(opt.dataset.hours || '0');
+        throw new Error("Selecciona una Palabra Clave o cambia a modo Manual.");
+      }
+      const hours = parseFloat((hoursEl.value || '').trim());
+      if (!Number.isFinite(hours) || hours < 0) throw new Error("Horas inválidas. Ingresa un número ≥ 0.");
+      return hours;
+    }
+
     function calculate() {
       try {
-        // Normaliza posibles caracteres invisibles en la fecha
         const dateStr = (dtEl.value || '').replace(/\u00A0/g, ' ').trim();
-        const hoursStr = (hoursEl.value || '').trim();
-
         const startDate = parseFlexibleDateTime(dateStr);
         if (!startDate) throw new Error("Fecha/hora inválida. Usa, por ejemplo: 2025-12-29 08:56:13");
 
-        const hours = parseFloat(hoursStr);
-        if (!Number.isFinite(hours) || hours < 0) throw new Error("Horas inválidas. Ingresa un número ≥ 0.");
+        const hours = getEffectiveHours();
 
         const workStart = workStartEl.value || "08:00";
         const workEnd   = workEndEl.value   || "19:00";
@@ -344,7 +478,7 @@
         toolsEl.style.display = 'flex';
         resultEl.innerHTML = `
           <div><b>Vence:</b> ${fmtPeru(end)} <small>(${fmtYMDHMS(end)})</small></div>
-          <div><small>Inicio: ${fmtPeru(startDate)} | Horas: ${hours}</small></div>
+          <div><small>Inicio: ${fmtPeru(startDate)} | Horas: ${hours}${currentMode==='lookup' ? ' (OLA)' : ''}</small></div>
           <div><small>Config: ${workStart}–${workEnd}${useBreak ? ` (pausa ${breakStart}–${breakEnd})` : ''}, días hábiles: ${workDays.join(', ') || '(ninguno)'}, feriados: ${holidays.length}</small></div>
         `;
         debugEl.textContent = debug;
@@ -365,25 +499,34 @@
       dtEl.value    = "2025-12-29 08:56:13";
       hoursEl.value = "48";
       holidaysEl.value = [
-        // Ajusta a tu calendario corporativo/país
         "2026-01-01","2025-12-25","2025-12-08","2025-11-01","2025-10-08",
         "2025-08-30","2025-07-29","2025-07-28","2025-06-29","2025-05-01",
         "2025-04-18","2025-04-17","2025-01-01"
       ].join('\n');
       wdChecks.forEach(c => c.checked = ['1','2','3','4','5'].includes(c.value)); // Lun–Vie
-      useBreakEl.checked = false; // desactivado por defecto (actívalo si quieres contar pausa)
+      useBreakEl.checked = false;
+
+      // Modo por defecto: Manual
+      setMode('manual');
+
+      // Pre-cargar OLA y limpiar filtros
+      initPreloadedOLA();
+      keywordFilterEl.value = '';
+      populateKeywordSelect();
+      lookupInfoEl.style.display = 'none';
+      lookupInfoEl.textContent = '';
+
       resultEl.style.display = 'none';
       toolsEl.style.display  = 'none';
       debugEl.textContent = '';
     }
 
-    // ====== Botón “Ahora” (Lima) ======
     function setNowLimaAndMaybeCalculate(autoCalc = true) {
       const comps = nowInTimeZoneComponents('America/Lima');
       const stamp = formatYMDHMS(comps);
       dtEl.value = stamp;
       if (autoCalc) {
-        if (!hoursEl.value || !hoursEl.value.trim()) hoursEl.value = '48';
+        if (currentMode === 'manual' && (!hoursEl.value || !hoursEl.value.trim())) hoursEl.value = '48';
         calculate();
       }
     }
@@ -393,9 +536,8 @@
     resetBtn.addEventListener('click', resetExample);
     nowBtn.addEventListener('click', () => setNowLimaAndMaybeCalculate(true));
 
-    // Inicializa ejemplo
+    // Inicializa
     resetExample();
   </script>
 </body>
 </html>
-
